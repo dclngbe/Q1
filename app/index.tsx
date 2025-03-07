@@ -414,10 +414,6 @@ export default function DataDisplay() {
       borderRightWidth: 1,
       borderRightColor: '#e5e7eb',
     },
-    actionColumn: {
-      width: '17.5%',
-      padding: 8,
-    },
     constraintsContent: {
       flex: 1,
     },
