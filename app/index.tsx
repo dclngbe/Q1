@@ -448,6 +448,18 @@ export default function DataDisplay() {
       alignItems: 'center',
       fontSize: 1,
     },
+    facilityText: {
+      fontSize: 10,
+      color: "#000000",
+    },
+    priceText: {
+      fontSize: 10,
+      color: "#000000",
+    },
+    actionText: {
+      fontSize: 10,
+      color: "#000000",
+    },
     modalContentLarge: {
       backgroundColor: 'white',
       borderRadius: 8,
