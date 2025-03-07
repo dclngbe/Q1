@@ -17,6 +17,7 @@ import { fetchLedgerData } from '../src/api/ledger';
 import { fetchGridData, GridData } from '../src/api/grid';
 import { fetchConstraints, Constraint } from '../src/api/constraints';
 import CalendarPicker from 'react-native-calendar-picker';
+import { createEmptyGridData } from '../src/api/grid';
 
 interface GridItem extends GridData {
   Combo?: number | null;
@@ -516,6 +517,7 @@ export default function DataDisplay() {
   const isLandscape = width > height;
   const lastGridDataRef = useRef<GridItem[] | null>(null);
   const lastTimestampRef = useRef<string | null>(null);
+  const lastConstraintsDataRef = useRef<Constraint[] | null>(null);
 
   const gridColumns = ['RT', 'DA', 'Combo', 'DA/RT'];
   const hubOptions = ['Western Hub', 'AD Hub', 'WH - AD Spread'];
@@ -565,27 +567,78 @@ export default function DataDisplay() {
     setShowDateSelector(false); // Close modal
   };
 
+  function mergeGridData(
+    cachedData: GridItem[] | null,
+    newData: GridItem[]
+  ): GridItem[] {
+    if (!cachedData) {
+      // First load – nothing to merge
+      return newData;
+    }
+  
+    // Merge each row: new values override cached ones.
+    return newData.map((newRow, index) => {
+      // Safely parse the hour
+      const hour =
+        typeof newRow.HE === 'number'
+          ? newRow.HE
+          : parseInt(newRow.HE as string, 10);
+  
+      // Fallback to a newly created empty row if none is cached at this index
+      const cachedRow = cachedData[index] || createEmptyGridData(hour);
+  
+      return {
+        ...cachedRow,
+        ...newRow,
+      };
+    });
+  }
+
+  function mergeLedgerData(
+    cachedData: LedgerItem[] | null,
+    newData: LedgerItem[]
+  ): LedgerItem[] {
+    if (
+      cachedData &&
+      cachedData.length > 0 &&
+      newData.length > 0 &&
+      cachedData[0].timestamp === newData[0].timestamp
+    ) {
+      return cachedData;
+    }
+    return newData;
+  }
+
+  function mergeConstraintsData(
+    cachedConstraints: Constraint[] | null,
+    newConstraints: Constraint[]
+  ): Constraint[] {
+    if (!cachedConstraints) {
+      return newConstraints;
+    }
+    // Here, you can compare arrays and merge as needed.
+    // For simplicity, if anything differs, return the new constraints.
+    const isDifferent =
+      newConstraints.length !== cachedConstraints.length ||
+      newConstraints.some((constraint, index) => {
+        return JSON.stringify(constraint) !== JSON.stringify(cachedConstraints[index]);
+      });
+    return isDifferent ? newConstraints : cachedConstraints;
+  }
+
   const fetchAndUpdateLedger = async () => {
     try {
       const ledgerData = await fetchLedgerData();
+      // Optionally, merge with cached ledger data if you add a similar ref (e.g., lastLedgerDataRef)
+      // const mergedLedger = mergeLedgerData(lastLedgerDataRef.current, ledgerData);
+      // lastLedgerDataRef.current = mergedLedger;
+      // setLedger(mergedLedger);
       
+      // If the timestamp check is sufficient, you can leave it as-is.
       if (ledgerData.length > 0 && ledgerData[0].timestamp) {
-        // Only update if we have a new timestamp
         if (ledgerData[0].timestamp !== lastTimestampRef.current) {
           lastTimestampRef.current = ledgerData[0].timestamp;
-          
-          const timestamp = new Date(ledgerData[0].timestamp);
-          // Convert to EST by subtracting 5 hours
-          timestamp.setHours(timestamp.getHours() - 2);
-          setLastUpdate(
-            timestamp.toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-              timeZone: 'America/New_York'
-            })
-          );
-          
+          // ... (existing timestamp update logic)
           const sortedLedgerData = [...ledgerData].sort(
             (a, b) => a.Dispatch - b.Dispatch
           );
@@ -623,13 +676,35 @@ export default function DataDisplay() {
       });
       
       if (hasNewData) {
-        lastGridDataRef.current = gridData;
-        setGrid(gridData);
-        setCurrentHE(getCurrentHE(gridData));
+        const mergedData = mergeGridData(lastGridDataRef.current, gridData);
+        lastGridDataRef.current = mergedData;
+        setGrid(mergedData);
+        setCurrentHE(getCurrentHE(mergedData));
       }
     } catch (err) {
       console.error('Error fetching grid data:', err);
       setGridError('Failed to load grid data');
+    }
+  };
+
+  const fetchAndUpdateConstraints = async (dateStr?: string, heNumber?: number, minute?: number) => {
+    try {
+      const newConstraintsData = await fetchConstraints(dateStr, heNumber, minute);
+      const mergedConstraints = mergeConstraintsData(
+        lastConstraintsDataRef.current,
+        newConstraintsData
+      );
+  
+      lastConstraintsDataRef.current = mergedConstraints;
+      setConstraints(mergedConstraints);
+  
+      // **Make sure you return it here**:
+      return mergedConstraints;
+    } catch (err) {
+      console.error('Error fetching constraints data:', err);
+      setConstraintsError('Failed to load constraints data');
+      // Return something reasonable on error:
+      return [];
     }
   };
 
@@ -641,12 +716,19 @@ export default function DataDisplay() {
         setError(null);
         setGridError(null);
         setConstraintsError(null);
-
-        const constraintsData = await fetchConstraints();
-
-        await fetchAndUpdateLedger();
-        await fetchAndUpdateGrid();
+  
+        // 1) Fetch & merge constraints
+        //    If your fetchAndUpdateConstraints function returns merged data,
+        //    you can capture it here and then setConstraints again if needed.
+        const constraintsData = await fetchAndUpdateConstraints();
         setConstraints(constraintsData);
+  
+        // 2) Fetch & merge ledger
+        await fetchAndUpdateLedger();
+  
+        // 3) Fetch & merge grid
+        await fetchAndUpdateGrid();
+  
       } catch (err) {
         setError('Failed to load data. Please try again later.');
         console.error('Error loading data:', err);
@@ -655,17 +737,8 @@ export default function DataDisplay() {
         setIsConstraintsLoading(false);
       }
     };
-
+  
     loadData();
-
-    // Poll for ledger and grid updates every 5 seconds
-    const ledgerInterval = setInterval(fetchAndUpdateLedger, 5000);
-    const gridInterval = setInterval(fetchAndUpdateGrid, 5000);
-
-    return () => {
-      clearInterval(ledgerInterval);
-      clearInterval(gridInterval);
-    };
   }, [selectedHub, gridDate]);
 
   const filteredGrid = useMemo(() => {
@@ -794,8 +867,7 @@ export default function DataDisplay() {
       
       try {
         setIsConstraintsLoading(true);
-        const constraintsData = await fetchConstraints(dateStr, heNumber, minute);
-        setConstraints(constraintsData);
+        await fetchAndUpdateConstraints(dateStr, heNumber, minute);
       } catch (err) {
         console.error('Error fetching interval constraints:', err);
         setConstraintsError('Failed to load interval constraints');

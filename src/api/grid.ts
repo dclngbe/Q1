@@ -46,7 +46,7 @@ const hubConfigs: HubConfigs = {
   }
 };
 
-function createEmptyGridData(hour: number): GridData {
+export function createEmptyGridData(hour: number): GridData {
   return {
     HE: String(hour),
     '0': null,
