@@ -518,6 +518,7 @@ export default function DataDisplay() {
   const lastGridDataRef = useRef<GridItem[] | null>(null);
   const lastTimestampRef = useRef<string | null>(null);
   const lastConstraintsDataRef = useRef<Constraint[] | null>(null);
+  const lastLedgerDataRef = useRef<LedgerItem[] | null>(null);
 
   const gridColumns = ['RT', 'DA', 'Combo', 'DA/RT'];
   const hubOptions = ['Western Hub', 'AD Hub', 'WH - AD Spread'];
@@ -629,19 +630,22 @@ export default function DataDisplay() {
   const fetchAndUpdateLedger = async () => {
     try {
       const ledgerData = await fetchLedgerData();
-      // Optionally, merge with cached ledger data if you add a similar ref (e.g., lastLedgerDataRef)
-      // const mergedLedger = mergeLedgerData(lastLedgerDataRef.current, ledgerData);
-      // lastLedgerDataRef.current = mergedLedger;
-      // setLedger(mergedLedger);
-      
-      // If the timestamp check is sufficient, you can leave it as-is.
+  
       if (ledgerData.length > 0 && ledgerData[0].timestamp) {
+        // Only update if we have a new timestamp
         if (ledgerData[0].timestamp !== lastTimestampRef.current) {
           lastTimestampRef.current = ledgerData[0].timestamp;
-          // ... (existing timestamp update logic)
-          const sortedLedgerData = [...ledgerData].sort(
+  
+          // 1) Merge with any cached ledger data
+          const mergedLedger = mergeLedgerData(lastLedgerDataRef.current, ledgerData);
+          lastLedgerDataRef.current = mergedLedger;
+  
+          // 2) Sort the merged data as before
+          const sortedLedgerData = [...mergedLedger].sort(
             (a, b) => a.Dispatch - b.Dispatch
           );
+  
+          // 3) Update state
           setLedger(sortedLedgerData);
         }
       }
