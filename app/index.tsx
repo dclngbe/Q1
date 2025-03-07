@@ -628,8 +628,12 @@ export default function DataDisplay() {
   }
 
   const fetchAndUpdateLedger = async () => {
+    console.time('fetchAndUpdateLedger');       // Start total function timer
+  
     try {
+      console.time('Ledger Data Fetch');        // Start fetch timer
       const ledgerData = await fetchLedgerData();
+      console.timeEnd('Ledger Data Fetch');     // End fetch timer
   
       if (ledgerData.length > 0 && ledgerData[0].timestamp) {
         // Only update if we have a new timestamp
@@ -651,34 +655,44 @@ export default function DataDisplay() {
       }
     } catch (err) {
       console.error('Error fetching ledger data:', err);
+    } finally {
+      console.timeEnd('fetchAndUpdateLedger');  // End total function timer
     }
   };
 
   const fetchAndUpdateGrid = async () => {
+    console.time('fetchAndUpdateGrid');        // Start total function timer
+  
     try {
+      console.time('Grid Data Fetch');         // Start fetch timer
       const gridData = await fetchGridData(selectedHub, gridDate);
-      
+      console.timeEnd('Grid Data Fetch');      // End fetch timer
+  
       // Compare only relevant data points
-      const hasNewData = !lastGridDataRef.current || gridData.some((row, i) => {
-        const lastRow = lastGridDataRef.current?.[i];
-        if (!lastRow) return true;
-        
-        // Compare only RT values and their components since DA doesn't change
-        return row.RT !== lastRow.RT ||
-               row['0'] !== lastRow['0'] ||
-               row['5'] !== lastRow['5'] ||
-               row['10'] !== lastRow['10'] ||
-               row['15'] !== lastRow['15'] ||
-               row['20'] !== lastRow['20'] ||
-               row['25'] !== lastRow['25'] ||
-               row['30'] !== lastRow['30'] ||
-               row['35'] !== lastRow['35'] ||
-               row['40'] !== lastRow['40'] ||
-               row['45'] !== lastRow['45'] ||
-               row['50'] !== lastRow['50'] ||
-               row['55'] !== lastRow['55'];
-      });
-      
+      const hasNewData =
+        !lastGridDataRef.current ||
+        gridData.some((row, i) => {
+          const lastRow = lastGridDataRef.current?.[i];
+          if (!lastRow) return true;
+  
+          // Compare only RT values and their components since DA doesn't change
+          return (
+            row.RT !== lastRow.RT ||
+            row['0'] !== lastRow['0'] ||
+            row['5'] !== lastRow['5'] ||
+            row['10'] !== lastRow['10'] ||
+            row['15'] !== lastRow['15'] ||
+            row['20'] !== lastRow['20'] ||
+            row['25'] !== lastRow['25'] ||
+            row['30'] !== lastRow['30'] ||
+            row['35'] !== lastRow['35'] ||
+            row['40'] !== lastRow['40'] ||
+            row['45'] !== lastRow['45'] ||
+            row['50'] !== lastRow['50'] ||
+            row['55'] !== lastRow['55']
+          );
+        });
+  
       if (hasNewData) {
         const mergedData = mergeGridData(lastGridDataRef.current, gridData);
         lastGridDataRef.current = mergedData;
@@ -688,12 +702,23 @@ export default function DataDisplay() {
     } catch (err) {
       console.error('Error fetching grid data:', err);
       setGridError('Failed to load grid data');
+    } finally {
+      console.timeEnd('fetchAndUpdateGrid');   // End total function timer
     }
   };
 
-  const fetchAndUpdateConstraints = async (dateStr?: string, heNumber?: number, minute?: number) => {
+  const fetchAndUpdateConstraints = async (
+    dateStr?: string,
+    heNumber?: number,
+    minute?: number
+  ) => {
+    console.time('fetchAndUpdateConstraints');  // Start total function timer
+  
     try {
+      console.time('Constraints Data Fetch');   // Start fetch timer
       const newConstraintsData = await fetchConstraints(dateStr, heNumber, minute);
+      console.timeEnd('Constraints Data Fetch'); // End fetch timer
+  
       const mergedConstraints = mergeConstraintsData(
         lastConstraintsDataRef.current,
         newConstraintsData
@@ -702,13 +727,14 @@ export default function DataDisplay() {
       lastConstraintsDataRef.current = mergedConstraints;
       setConstraints(mergedConstraints);
   
-      // **Make sure you return it here**:
+      // Return so you can optionally capture this data in your useEffect
       return mergedConstraints;
     } catch (err) {
       console.error('Error fetching constraints data:', err);
       setConstraintsError('Failed to load constraints data');
-      // Return something reasonable on error:
       return [];
+    } finally {
+      console.timeEnd('fetchAndUpdateConstraints'); // End total function timer
     }
   };
 
